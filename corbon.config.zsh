@@ -1,8 +1,4 @@
-# Corbon user configuration
 
-# ─────────────────────────────────────
-# Layout
-# ─────────────────────────────────────
 
 CORBON_LAYOUT="two-line"
 
@@ -15,26 +11,16 @@ CORBON_PROMPT_SYMBOL="❯"
 CORBON_CONTINUATION_SYMBOL="·"
 
 
-# ─────────────────────────────────────
-# Context
-# ─────────────────────────────────────
-
 CORBON_SHOW_USER=true
 CORBON_SHOW_HOST="ssh"
 
 
-# ─────────────────────────────────────
-# Path
-# ─────────────────────────────────────
 
 CORBON_PATH_STYLE="smart"
 CORBON_PATH_MAX=4
 CORBON_PATH_TRUNCATE="…"
 
 
-# ─────────────────────────────────────
-# Git
-# ─────────────────────────────────────
 
 CORBON_GIT_BRANCH=true
 CORBON_GIT_STATUS=true
@@ -47,9 +33,6 @@ CORBON_GIT_UNTRACKED_SYMBOL="?"
 CORBON_GIT_CONFLICT_SYMBOL="!"
 
 
-# ─────────────────────────────────────
-# Runtime
-# ─────────────────────────────────────
 
 CORBON_SHOW_EXIT=true
 
@@ -59,10 +42,6 @@ CORBON_DURATION_THRESHOLD=1
 CORBON_SHOW_TIME=false
 CORBON_TIME_FORMAT="%H:%M"
 
-
-# ─────────────────────────────────────
-# Colors
-# ─────────────────────────────────────
 
 CORBON_COLOR_USER="%F{white}"
 CORBON_COLOR_HOST="%F{cyan}"
