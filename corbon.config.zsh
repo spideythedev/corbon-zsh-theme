@@ -1,4 +1,4 @@
-
+# Corbon - Configuration
 
 CORBON_LAYOUT="two-line"
 
