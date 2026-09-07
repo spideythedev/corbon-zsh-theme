@@ -1,4 +1,4 @@
-typeset -g CORBON_VERSION="0.4.0"
+typeset -g CORBON_VERSION="0.5.0"
 typeset -gA CORBON_SEGMENTS
 
 : ${CORBON_LAYOUT:="two-line"}
@@ -20,6 +20,8 @@ typeset -gA CORBON_SEGMENTS
 : ${CORBON_GIT_BRANCH:=true}
 : ${CORBON_GIT_STATUS:=true}
 : ${CORBON_GIT_AHEAD_BEHIND:=true}
+: ${CORBON_GIT_CACHE:=true}
+: ${CORBON_GIT_CACHE_TTL:=2}
 
 : ${CORBON_GIT_CLEAN_SYMBOL:="✓"}
 : ${CORBON_GIT_DIRTY_SYMBOL:="±"}
@@ -32,31 +34,6 @@ typeset -gA CORBON_SEGMENTS
 
 : ${CORBON_SHOW_TIME:=false}
 : ${CORBON_TIME_FORMAT:="%H:%M"}
-
-: ${CORBON_COLOR_USER:="%F{white}"}
-: ${CORBON_COLOR_HOST:="%F{cyan}"}
-: ${CORBON_COLOR_PATH:="%F{245}"}
-: ${CORBON_COLOR_GIT:="%F{yellow}"}
-: ${CORBON_COLOR_SUCCESS:="%F{green}"}
-: ${CORBON_COLOR_ERROR:="%F{red}"}
-: ${CORBON_COLOR_MUTED:="%F{242}"}
-: ${CORBON_COLOR_ACCENT:="%F{yellow}"}
-: ${CORBON_RESET:="%f"}
-
-typeset -g CORBON_ICON_DOCKER="docker:"
-typeset -g CORBON_ICON_KUBERNETES="k8s:"
-typeset -g CORBON_ICON_AWS="aws:"
-typeset -g CORBON_ICON_GCP="gcp:"
-typeset -g CORBON_ICON_AZURE="az:"
-typeset -g CORBON_ICON_GO="go:"
-typeset -g CORBON_ICON_RUST="rs:"
-typeset -g CORBON_ICON_JAVA="java:"
-typeset -g CORBON_ICON_RUBY="rb:"
-typeset -g CORBON_ICON_OS="os:"
-typeset -g CORBON_ICON_ARCH="arch:"
-typeset -g CORBON_ICON_JOBS="jobs:"
-typeset -g CORBON_ICON_ROOT="root:"
-typeset -g CORBON_ICON_CONTAINER="container:"
 
 : ${CORBON_SHOW_DOCKER:=false}
 : ${CORBON_SHOW_KUBERNETES:=false}
@@ -73,9 +50,38 @@ typeset -g CORBON_ICON_CONTAINER="container:"
 : ${CORBON_SHOW_ROOT:=true}
 : ${CORBON_SHOW_CONTAINER:=true}
 
+: ${CORBON_ICON_DOCKER:="docker:"}
+: ${CORBON_ICON_KUBERNETES:="k8s:"}
+: ${CORBON_ICON_AWS:="aws:"}
+: ${CORBON_ICON_GCP:="gcp:"}
+: ${CORBON_ICON_AZURE:="az:"}
+: ${CORBON_ICON_GO:="go:"}
+: ${CORBON_ICON_RUST:="rs:"}
+: ${CORBON_ICON_JAVA:="java:"}
+: ${CORBON_ICON_RUBY:="rb:"}
+: ${CORBON_ICON_OS:="os:"}
+: ${CORBON_ICON_ARCH:="arch:"}
+: ${CORBON_ICON_JOBS:="jobs:"}
+: ${CORBON_ICON_ROOT:="root:"}
+: ${CORBON_ICON_CONTAINER:="container:"}
+
+: ${CORBON_COLOR_USER:="%F{white}"}
+: ${CORBON_COLOR_HOST:="%F{cyan}"}
+: ${CORBON_COLOR_PATH:="%F{245}"}
+: ${CORBON_COLOR_GIT:="%F{yellow}"}
+: ${CORBON_COLOR_SUCCESS:="%F{green}"}
+: ${CORBON_COLOR_ERROR:="%F{red}"}
+: ${CORBON_COLOR_MUTED:="%F{242}"}
+: ${CORBON_COLOR_ACCENT:="%F{yellow}"}
+: ${CORBON_RESET:="%f"}
+
 typeset -g CORBON_COMMAND_STARTED=0
 typeset -g CORBON_LAST_DURATION=0
 typeset -g CORBON_LAST_EXIT=0
+
+typeset -g CORBON_GIT_CACHE_TIME=0
+typeset -g CORBON_GIT_CACHE_DIR=""
+typeset -g CORBON_GIT_CACHE_VALUE=""
 
 corbon_segment() {
     local name="$1"
@@ -125,7 +131,7 @@ _corbon_git_status() {
     print -r -- "$result"
 }
 
-_corbon_git_segment() {
+_corbon_git_build() {
     _corbon_git_root || return
 
     local branch=""
@@ -159,6 +165,33 @@ _corbon_git_segment() {
 
     [[ -n "$result" ]] &&
         print -r -- "${CORBON_COLOR_GIT}${result}${CORBON_RESET}"
+}
+
+_corbon_git_segment() {
+    _corbon_git_root || return
+
+    if [[ "$CORBON_GIT_CACHE" != true ]]; then
+        _corbon_git_build
+        return
+    fi
+
+    local now="$SECONDS"
+    local age=$((now - CORBON_GIT_CACHE_TIME))
+
+    if [[ "$CORBON_GIT_CACHE_DIR" == "$PWD" ]] &&
+       (( age < CORBON_GIT_CACHE_TTL )) &&
+       [[ -n "$CORBON_GIT_CACHE_VALUE" ]]; then
+        print -r -- "$CORBON_GIT_CACHE_VALUE"
+        return
+    fi
+
+    local value="$(_corbon_git_build)"
+
+    CORBON_GIT_CACHE_TIME="$now"
+    CORBON_GIT_CACHE_DIR="$PWD"
+    CORBON_GIT_CACHE_VALUE="$value"
+
+    print -r -- "$value"
 }
 
 _corbon_context_segment() {
@@ -206,9 +239,20 @@ _corbon_python_segment() {
 }
 
 _corbon_node_segment() {
-    [[ -n "$NODE_VERSION" ]] || return
+    local version=""
 
-    print -r -- "${CORBON_COLOR_MUTED}node:${NODE_VERSION}${CORBON_RESET}"
+    if [[ -n "$NODE_VERSION" ]]; then
+        version="$NODE_VERSION"
+    elif [[ -f .nvmrc ]]; then
+        version="$(<.nvmrc)"
+    elif [[ -f package.json ]] && command -v node >/dev/null 2>&1; then
+        version="$(node --version 2>/dev/null)"
+        version="${version#v}"
+    fi
+
+    [[ -n "$version" ]] || return
+
+    print -r -- "${CORBON_COLOR_MUTED}node:${version}${CORBON_RESET}"
 }
 
 _corbon_duration_segment() {
@@ -277,11 +321,10 @@ _corbon_azure_segment() {
 
 _corbon_go_segment() {
     [[ "$CORBON_SHOW_GO" == true ]] || return
-    command -v go >/dev/null 2>&1 || return
     [[ -f go.mod ]] || return
+    command -v go >/dev/null 2>&1 || return
 
     local version
-
     version="$(go version 2>/dev/null)" || return
     version="${version#go version go}"
     version="${version%% *}"
@@ -291,11 +334,10 @@ _corbon_go_segment() {
 
 _corbon_rust_segment() {
     [[ "$CORBON_SHOW_RUST" == true ]] || return
-    command -v rustc >/dev/null 2>&1 || return
     [[ -f Cargo.toml ]] || return
+    command -v rustc >/dev/null 2>&1 || return
 
     local version
-
     version="$(rustc --version 2>/dev/null)" || return
     version="${version#rustc }"
     version="${version%% *}"
@@ -305,11 +347,10 @@ _corbon_rust_segment() {
 
 _corbon_java_segment() {
     [[ "$CORBON_SHOW_JAVA" == true ]] || return
-    command -v java >/dev/null 2>&1 || return
     [[ -f pom.xml || -f build.gradle || -f build.gradle.kts || -f settings.gradle ]] || return
+    command -v java >/dev/null 2>&1 || return
 
     local version
-
     version="$(java -version 2>&1 | head -n 1)" || return
 
     print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_JAVA}${version}${CORBON_RESET}"
@@ -317,11 +358,10 @@ _corbon_java_segment() {
 
 _corbon_ruby_segment() {
     [[ "$CORBON_SHOW_RUBY" == true ]] || return
-    command -v ruby >/dev/null 2>&1 || return
     [[ -f Gemfile || -f .ruby-version ]] || return
+    command -v ruby >/dev/null 2>&1 || return
 
     local version
-
     version="$(ruby --version 2>/dev/null)" || return
     version="${version#ruby }"
     version="${version%% *}"
@@ -335,18 +375,10 @@ _corbon_os_segment() {
     local os="$OSTYPE"
 
     case "$os" in
-        darwin*)
-            os="macOS"
-            ;;
-        linux*)
-            os="Linux"
-            ;;
-        freebsd*)
-            os="FreeBSD"
-            ;;
-        *)
-            os="${os%%-*}"
-            ;;
+        darwin*) os="macOS" ;;
+        linux*) os="Linux" ;;
+        freebsd*) os="FreeBSD" ;;
+        *) os="${os%%-*}" ;;
     esac
 
     print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_OS}${os}${CORBON_RESET}"
@@ -458,24 +490,31 @@ _corbon_precmd() {
 
     local left="$(_corbon_render_list "${CORBON_LEFT}")"
     local right="$(_corbon_render_list "${CORBON_RIGHT}")"
-    local prompt="$left"
-
-    [[ -n "$right" ]] &&
-        prompt+="${CORBON_SEPARATOR}${right}"
 
     if [[ "$CORBON_LAYOUT" == "two-line" ]]; then
-        prompt+="\n"
+        PROMPT="$left"
+
+        if (( CORBON_LAST_EXIT != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
+            PROMPT+=" ${CORBON_COLOR_ERROR}${CORBON_LAST_EXIT}${CORBON_RESET}"
+        fi
+
+        PROMPT+="\n"
+        PROMPT+="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+
+        RPROMPT="$right"
     else
-        prompt+=" "
+        PROMPT="$left"
+
+        [[ -n "$right" ]] &&
+            PROMPT+="${CORBON_SEPARATOR}${right}"
+
+        if (( CORBON_LAST_EXIT != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
+            PROMPT+=" ${CORBON_COLOR_ERROR}${CORBON_LAST_EXIT}${CORBON_RESET}"
+        fi
+
+        PROMPT+=" ${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+        RPROMPT=""
     fi
-
-    if (( CORBON_LAST_EXIT != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
-        prompt+="${CORBON_COLOR_ERROR}${CORBON_LAST_EXIT}${CORBON_RESET} "
-    fi
-
-    prompt+="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
-
-    PROMPT="$prompt"
 }
 
 autoload -Uz add-zsh-hook
@@ -484,3 +523,4 @@ add-zsh-hook preexec _corbon_preexec
 add-zsh-hook precmd _corbon_precmd
 
 PROMPT="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+RPROMPT=""
