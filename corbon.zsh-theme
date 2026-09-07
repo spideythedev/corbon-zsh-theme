@@ -1,191 +1,348 @@
-typeset -g CORBON_VERSION="0.6.0"
+typeset -g CORBON_VERSION="0.7.0"
 
 typeset -gA CORBON_SEGMENTS
 typeset -gA CORBON_PALETTE
+typeset -gA CORBON_SYMBOL
+typeset -gA CORBON_STYLE
 
 setopt prompt_subst
 
 : ${CORBON_THEME:="ember"}
-: ${CORBON_COLOR_MODE:="palette"}
+: ${CORBON_COLOR_MODE:="truecolor"}
 
 CORBON_PALETTE=(
-    foreground "%F{255}"
-    muted "%F{242}"
-    accent "%F{214}"
+    background "#0D0F12"
+    foreground "#F1F0EB"
+    secondary "#B7B8B3"
+    muted "#6E716F"
 
-    success "%F{114}"
-    warning "%F{214}"
-    error "%F{203}"
-    info "%F{117}"
+    accent "#FF8A3D"
+    accent_soft "#FFB454"
+    gold "#E7C66A"
 
-    user "%F{255}"
-    host "%F{117}"
-    path "%F{250}"
-    path_home "%F{255}"
-    separator "%F{242}"
+    success "#72C98A"
+    warning "#E7B85C"
+    error "#E87575"
+    info "#72B7D9"
 
-    git "%F{214}"
-    git_branch "%F{255}"
-    git_arrow "%F{214}"
-    git_clean "%F{114}"
-    git_dirty "%F{214}"
-    git_staged "%F{117}"
-    git_untracked "%F{221}"
-    git_conflict "%F{203}"
-    git_stash "%F{176}"
-    git_ahead "%F{117}"
-    git_behind "%F{176}"
+    user "#E8C98B"
+    host "#B9B6AC"
 
-    python "%F{117}"
-    node "%F{114}"
-    go "%F{117}"
-    rust "%F{221}"
-    java "%F{203}"
-    ruby "%F{203}"
+    path "#F1F0EB"
+    path_home "#FFB454"
+    path_root "#E87575"
+    path_truncation "#6E716F"
 
-    docker "%F{117}"
-    kubernetes "%F{117}"
-    aws "%F{221}"
-    gcp "%F{117}"
-    azure "%F{117}"
+    separator "#35393F"
 
-    os "%F{242}"
-    arch "%F{242}"
-    shell "%F{255}"
-    jobs "%F{176}"
-    root "%F{203}"
-    container "%F{221}"
+    git_branch "#F1F0EB"
+    git_arrow "#FF9A4A"
+    git_clean "#78C98B"
+    git_dirty "#E7B85C"
+    git_staged "#D6A45E"
+    git_untracked "#A8A9A4"
+    git_conflict "#E87575"
+    git_stash "#C39A68"
+    git_ahead "#72B7D9"
+    git_behind "#8E91A0"
 
-    duration "%F{242}"
-    time "%F{242}"
-    date "%F{242}"
+    python "#7FAF9A"
+    node "#91B875"
+    go "#72B7A4"
+    rust "#C9826B"
+    java "#D18B6F"
+    ruby "#B87883"
 
-    prompt "%F{214}"
-    continuation "%F{242}"
+    docker "#72AEB7"
+    kubernetes "#7899C7"
+    aws "#D9A15F"
+    gcp "#719BC7"
+    azure "#6EA8C8"
+    terraform "#967FC2"
+
+    os "#A7ABB2"
+    arch "#858A93"
+    shell "#F1F0EB"
+    jobs "#D4A85E"
+    root "#E87575"
+    container "#7FB5B0"
+
+    duration "#858A93"
+    time "#858A93"
+    date "#858A93"
+
+    prompt "#FF8A3D"
+    prompt_arrow "#FFB454"
+    continuation "#B97845"
+
+    exit_success "#72C98A"
+    exit_error "#E87575"
+)
+
+CORBON_SYMBOL=(
+    prompt "╰─⟫"
+    continuation "·"
+
+    git_branch "⎇"
+    git_arrow "⟫"
+    git_clean "✓"
+    git_dirty "±"
+    git_staged "+"
+    git_untracked "?"
+    git_conflict "✗"
+
+    ssh "@"
+    root "#"
+    jobs "*"
+    container "⧉"
+)
+
+CORBON_STYLE=(
+    foreground "normal"
+    muted "normal"
+    accent "bold"
+    prompt "normal"
+
+    git_branch "normal"
+    git_arrow "normal"
+    git_clean "normal"
+    git_dirty "bold"
+    git_staged "normal"
+    git_untracked "normal"
+    git_conflict "bold"
+
+    error "bold"
+    warning "normal"
 )
 
 _corbon_color() {
     local name="$1"
     local fallback="${2:-muted}"
+    local value="${CORBON_PALETTE[$name]}"
 
-    [[ -n "${CORBON_PALETTE[$name]}" ]] &&
-        print -r -- "${CORBON_PALETTE[$name]}" ||
-        print -r -- "${CORBON_PALETTE[$fallback]}"
+    [[ -n "$value" ]] || value="${CORBON_PALETTE[$fallback]}"
+
+    case "$CORBON_COLOR_MODE" in
+        truecolor)
+            print -r -- "%F{${value}}"
+            ;;
+        palette)
+            case "$name" in
+                foreground|path|shell)
+                    print -r -- "%F{255}"
+                    ;;
+                muted|secondary|duration|time|date|separator)
+                    print -r -- "%F{242}"
+                    ;;
+                accent|prompt|git_arrow)
+                    print -r -- "%F{214}"
+                    ;;
+                accent_soft|gold|warning|git_dirty)
+                    print -r -- "%F{221}"
+                    ;;
+                success|git_clean)
+                    print -r -- "%F{114}"
+                    ;;
+                error|git_conflict|root)
+                    print -r -- "%F{203}"
+                    ;;
+                info|git_ahead)
+                    print -r -- "%F{117}"
+                    ;;
+                *)
+                    print -r -- "%F{250}"
+                    ;;
+            esac
+            ;;
+        *)
+            print -r -- "%F{${value}}"
+            ;;
+    esac
+}
+
+_corbon_style() {
+    local name="$1"
+    local style="${CORBON_STYLE[$name]}"
+
+    case "$style" in
+        bold)
+            print -r -- "%B"
+            ;;
+        dim)
+            print -r -- "%S"
+            ;;
+        underline)
+            print -r -- "%U"
+            ;;
+        inverse)
+            print -r -- "%S"
+            ;;
+        *)
+            print -r -- ""
+            ;;
+    esac
+}
+
+_corbon_reset() {
+    print -r -- "%f%b%s%u%k"
+}
+
+_corbon_paint() {
+    local color="$1"
+    local value="$2"
+    local style="${3:-}"
+
+    [[ -n "$value" ]] || return
+
+    print -r -- "$(_corbon_color "$color")$(_corbon_style "$style")${value}$(_corbon_reset)"
+}
+
+_corbon_symbol() {
+    local name="$1"
+
+    [[ -n "${CORBON_SYMBOL[$name]}" ]] &&
+        print -r -- "${CORBON_SYMBOL[$name]}"
 }
 
 _corbon_theme_ember() {
     CORBON_PALETTE=(
-        foreground "%F{255}"
-        muted "%F{242}"
-        accent "%F{214}"
+        background "#0D0F12"
+        foreground "#F1F0EB"
+        secondary "#B7B8B3"
+        muted "#6E716F"
 
-        success "%F{114}"
-        warning "%F{214}"
-        error "%F{203}"
-        info "%F{117}"
+        accent "#FF8A3D"
+        accent_soft "#FFB454"
+        gold "#E7C66A"
 
-        user "%F{255}"
-        host "%F{117}"
-        path "%F{250}"
-        path_home "%F{255}"
-        separator "%F{242}"
+        success "#72C98A"
+        warning "#E7B85C"
+        error "#E87575"
+        info "#72B7D9"
 
-        git "%F{214}"
-        git_branch "%F{255}"
-        git_arrow "%F{214}"
-        git_clean "%F{114}"
-        git_dirty "%F{214}"
-        git_staged "%F{117}"
-        git_untracked "%F{221}"
-        git_conflict "%F{203}"
-        git_stash "%F{176}"
-        git_ahead "%F{117}"
-        git_behind "%F{176}"
+        user "#E8C98B"
+        host "#B9B6AC"
 
-        python "%F{117}"
-        node "%F{114}"
-        go "%F{117}"
-        rust "%F{221}"
-        java "%F{203}"
-        ruby "%F{203}"
+        path "#F1F0EB"
+        path_home "#FFB454"
+        path_root "#E87575"
+        path_truncation "#6E716F"
 
-        docker "%F{117}"
-        kubernetes "%F{117}"
-        aws "%F{221}"
-        gcp "%F{117}"
-        azure "%F{117}"
+        separator "#35393F"
 
-        os "%F{242}"
-        arch "%F{242}"
-        shell "%F{255}"
-        jobs "%F{176}"
-        root "%F{203}"
-        container "%F{221}"
+        git_branch "#F1F0EB"
+        git_arrow "#FF9A4A"
+        git_clean "#78C98B"
+        git_dirty "#E7B85C"
+        git_staged "#D6A45E"
+        git_untracked "#A8A9A4"
+        git_conflict "#E87575"
+        git_stash "#C39A68"
+        git_ahead "#72B7D9"
+        git_behind "#8E91A0"
 
-        duration "%F{242}"
-        time "%F{242}"
-        date "%F{242}"
+        python "#7FAF9A"
+        node "#91B875"
+        go "#72B7A4"
+        rust "#C9826B"
+        java "#D18B6F"
+        ruby "#B87883"
 
-        prompt "%F{214}"
-        continuation "%F{242}"
+        docker "#72AEB7"
+        kubernetes "#7899C7"
+        aws "#D9A15F"
+        gcp "#719BC7"
+        azure "#6EA8C8"
+        terraform "#967FC2"
+
+        os "#A7ABB2"
+        arch "#858A93"
+        shell "#F1F0EB"
+        jobs "#D4A85E"
+        root "#E87575"
+        container "#7FB5B0"
+
+        duration "#858A93"
+        time "#858A93"
+        date "#858A93"
+
+        prompt "#FF8A3D"
+        prompt_arrow "#FFB454"
+        continuation "#B97845"
+
+        exit_success "#72C98A"
+        exit_error "#E87575"
     )
 }
 
 _corbon_theme_mono() {
     CORBON_PALETTE=(
-        foreground "%F{255}"
-        muted "%F{242}"
-        accent "%F{250}"
+        background "#0D0F12"
+        foreground "#F1F0EB"
+        secondary "#B7B8B3"
+        muted "#6E716F"
 
-        success "%F{255}"
-        warning "%F{255}"
-        error "%F{255}"
-        info "%F{255}"
+        accent "#F1F0EB"
+        accent_soft "#B7B8B3"
+        gold "#B7B8B3"
 
-        user "%F{255}"
-        host "%F{250}"
-        path "%F{250}"
-        path_home "%F{255}"
-        separator "%F{242}"
+        success "#F1F0EB"
+        warning "#F1F0EB"
+        error "#F1F0EB"
+        info "#F1F0EB"
 
-        git "%F{255}"
-        git_branch "%F{255}"
-        git_arrow "%F{250}"
-        git_clean "%F{255}"
-        git_dirty "%F{255}"
-        git_staged "%F{255}"
-        git_untracked "%F{255}"
-        git_conflict "%F{255}"
-        git_stash "%F{255}"
-        git_ahead "%F{255}"
-        git_behind "%F{255}"
+        user "#F1F0EB"
+        host "#B7B8B3"
 
-        python "%F{250}"
-        node "%F{250}"
-        go "%F{250}"
-        rust "%F{250}"
-        java "%F{250}"
-        ruby "%F{250}"
+        path "#F1F0EB"
+        path_home "#F1F0EB"
+        path_root "#F1F0EB"
+        path_truncation "#6E716F"
 
-        docker "%F{250}"
-        kubernetes "%F{250}"
-        aws "%F{250}"
-        gcp "%F{250}"
-        azure "%F{250}"
+        separator "#35393F"
 
-        os "%F{242}"
-        arch "%F{242}"
-        shell "%F{255}"
-        jobs "%F{250}"
-        root "%F{255}"
-        container "%F{250}"
+        git_branch "#F1F0EB"
+        git_arrow "#B7B8B3"
+        git_clean "#F1F0EB"
+        git_dirty "#F1F0EB"
+        git_staged "#F1F0EB"
+        git_untracked "#B7B8B3"
+        git_conflict "#F1F0EB"
+        git_stash "#B7B8B3"
+        git_ahead "#B7B8B3"
+        git_behind "#6E716F"
 
-        duration "%F{242}"
-        time "%F{242}"
-        date "%F{242}"
+        python "#B7B8B3"
+        node "#B7B8B3"
+        go "#B7B8B3"
+        rust "#B7B8B3"
+        java "#B7B8B3"
+        ruby "#B7B8B3"
 
-        prompt "%F{255}"
-        continuation "%F{242}"
+        docker "#B7B8B3"
+        kubernetes "#B7B8B3"
+        aws "#B7B8B3"
+        gcp "#B7B8B3"
+        azure "#B7B8B3"
+        terraform "#B7B8B3"
+
+        os "#6E716F"
+        arch "#6E716F"
+        shell "#F1F0EB"
+        jobs "#B7B8B3"
+        root "#F1F0EB"
+        container "#B7B8B3"
+
+        duration "#6E716F"
+        time "#6E716F"
+        date "#6E716F"
+
+        prompt "#F1F0EB"
+        prompt_arrow "#B7B8B3"
+        continuation "#6E716F"
+
+        exit_success "#F1F0EB"
+        exit_error "#F1F0EB"
     )
 }
 
@@ -214,10 +371,7 @@ _corbon_apply_theme
 
 : ${CORBON_SEPARATOR:="  "}
 
-: ${CORBON_PROMPT_SYMBOL:="⟫"}
-: ${CORBON_CONTINUATION_SYMBOL:="·"}
-
-: ${CORBON_SHOW_USER:=true}
+: ${CORBON_SHOW_USER:=false}
 : ${CORBON_SHOW_HOST:="ssh"}
 : ${CORBON_SHOW_EXIT:=true}
 
@@ -230,13 +384,8 @@ _corbon_apply_theme
 : ${CORBON_GIT_CACHE:=true}
 : ${CORBON_GIT_CACHE_TTL:=2}
 
-: ${CORBON_GIT_BRANCH_SYMBOL:=""}
-: ${CORBON_GIT_ARROW_SYMBOL:="⟫"}
-: ${CORBON_GIT_CLEAN_SYMBOL:="✓"}
-: ${CORBON_GIT_DIRTY_SYMBOL:="±"}
-: ${CORBON_GIT_STAGED_SYMBOL:="+"}
-: ${CORBON_GIT_UNTRACKED_SYMBOL:="?"}
-: ${CORBON_GIT_CONFLICT_SYMBOL:="!"}
+: ${CORBON_GIT_SHOW_ICON:=true}
+: ${CORBON_GIT_SHOW_ARROW:=true}
 
 : ${CORBON_SHOW_DURATION:=true}
 : ${CORBON_DURATION_THRESHOLD:=1}
@@ -261,6 +410,33 @@ corbon_segment() {
     CORBON_SEGMENTS[$name]="$function"
 }
 
+corbon_symbol() {
+    local name="$1"
+    local value="$2"
+
+    [[ -n "$name" ]] || return 1
+
+    CORBON_SYMBOL[$name]="$value"
+}
+
+corbon_color() {
+    local name="$1"
+    local value="$2"
+
+    [[ -n "$name" && -n "$value" ]] || return 1
+
+    CORBON_PALETTE[$name]="$value"
+}
+
+corbon_style() {
+    local name="$1"
+    local value="$2"
+
+    [[ -n "$name" ]] || return 1
+
+    CORBON_STYLE[$name]="$value"
+}
+
 _corbon_git_root() {
     git rev-parse --show-toplevel >/dev/null 2>&1
 }
@@ -279,25 +455,43 @@ _corbon_git_status() {
 
         case "${line[1,2]}" in
             UU|AA|DD|AU|UA)
-                result+="${CORBON_GIT_CONFLICT_SYMBOL}"
+                result+="${CORBON_SYMBOL[git_conflict]}"
                 ;;
             \?\?)
-                result+="${CORBON_GIT_UNTRACKED_SYMBOL}"
+                result+="${CORBON_SYMBOL[git_untracked]}"
                 ;;
             *)
                 [[ "${line[1]}" != " " ]] &&
-                    result+="${CORBON_GIT_STAGED_SYMBOL}"
+                    result+="${CORBON_SYMBOL[git_staged]}"
 
                 [[ "${line[2]}" != " " ]] &&
-                    result+="${CORBON_GIT_DIRTY_SYMBOL}"
+                    result+="${CORBON_SYMBOL[git_dirty]}"
                 ;;
         esac
     done < <(git status --porcelain=v1 2>/dev/null)
 
     [[ -z "$result" ]] &&
-        result="${CORBON_GIT_CLEAN_SYMBOL}"
+        result="${CORBON_SYMBOL[git_clean]}"
 
     print -r -- "$result"
+}
+
+_corbon_git_status_color() {
+    local status="$1"
+
+    [[ "$status" == *"${CORBON_SYMBOL[git_conflict]}"* ]] &&
+        print -r -- "git_conflict" && return
+
+    [[ "$status" == *"${CORBON_SYMBOL[git_staged]}"* ]] &&
+        print -r -- "git_staged" && return
+
+    [[ "$status" == *"${CORBON_SYMBOL[git_untracked]}"* ]] &&
+        print -r -- "git_untracked" && return
+
+    [[ "$status" == *"${CORBON_SYMBOL[git_dirty]}"* ]] &&
+        print -r -- "git_dirty" && return
+
+    print -r -- "git_clean"
 }
 
 _corbon_git_build() {
@@ -308,55 +502,48 @@ _corbon_git_build() {
     local result=""
     local ahead=0
     local behind=0
+    local status_color="git_clean"
 
     if [[ "$CORBON_GIT_BRANCH" == true ]]; then
         branch="$(_corbon_git_branch)"
-
-        [[ -n "$branch" ]] &&
-            result="${branch}"
     fi
 
     if [[ "$CORBON_GIT_STATUS" == true ]]; then
         status="$(_corbon_git_status)"
-
-        [[ -n "$status" ]] &&
-            result+="${result:+ }${status}"
+        status_color="$(_corbon_git_status_color "$status")"
     fi
 
     if [[ "$CORBON_GIT_AHEAD_BEHIND" == true ]]; then
         ahead="$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null)" || ahead=0
         behind="$(git rev-list --count 'HEAD..@{upstream}' 2>/dev/null)" || behind=0
-
-        (( ahead > 0 )) &&
-            result+=" ↑${ahead}"
-
-        (( behind > 0 )) &&
-            result+=" ↓${behind}"
     fi
 
-    [[ -n "$result" ]] || return
-
-    local branch_color="$(_corbon_color git_branch)"
-    local arrow_color="$(_corbon_color git_arrow)"
-    local status_color="$(_corbon_color git_clean)"
-
-    [[ "$status" == *"$CORBON_GIT_DIRTY_SYMBOL"* ]] &&
-        status_color="$(_corbon_color git_dirty)"
-
-    [[ "$status" == *"$CORBON_GIT_STAGED_SYMBOL"* ]] &&
-        status_color="$(_corbon_color git_staged)"
-
-    [[ "$status" == *"$CORBON_GIT_UNTRACKED_SYMBOL"* ]] &&
-        status_color="$(_corbon_color git_untracked)"
-
-    [[ "$status" == *"$CORBON_GIT_CONFLICT_SYMBOL"* ]] &&
-        status_color="$(_corbon_color git_conflict)"
+    if [[ "$CORBON_GIT_SHOW_ICON" == true && -n "$branch" ]]; then
+        result+="$(_corbon_paint git_arrow "${CORBON_SYMBOL[git_branch]}") "
+    fi
 
     if [[ -n "$branch" ]]; then
-        print -r -- "${branch_color}${branch}${CORBON_RESET} ${arrow_color}${CORBON_GIT_ARROW_SYMBOL}${CORBON_RESET} ${status_color}${status}${CORBON_RESET}"
-    else
-        print -r -- "${status_color}${status}${CORBON_RESET}"
+        result+="$(_corbon_paint git_branch "$branch" git_branch)"
     fi
+
+    if [[ "$CORBON_GIT_SHOW_ARROW" == true && -n "$status" && -n "$branch" ]]; then
+        result+=" $(_corbon_paint git_arrow "${CORBON_SYMBOL[git_arrow]}")"
+    fi
+
+    if [[ -n "$status" ]]; then
+        result+=" $(_corbon_paint "$status_color" "$status")"
+    fi
+
+    if (( ahead > 0 )); then
+        result+=" $(_corbon_paint git_ahead "↑${ahead}")"
+    fi
+
+    if (( behind > 0 )); then
+        result+=" $(_corbon_paint git_behind "↓${behind}")"
+    fi
+
+    [[ -n "$result" ]] &&
+        print -r -- "$result"
 }
 
 _corbon_git_segment() {
@@ -390,14 +577,23 @@ _corbon_context_segment() {
     local result=""
 
     if [[ "$CORBON_SHOW_USER" == true ]]; then
-        result+="$(_corbon_color user)%n${CORBON_RESET}"
+        result+="$(_corbon_paint user "%n")"
     fi
 
     if [[ "$CORBON_SHOW_HOST" == true ]]; then
         if [[ "$CORBON_SHOW_HOST" != "ssh" || -n "$SSH_CONNECTION" ]]; then
-            result+="$(_corbon_color separator)@${CORBON_RESET}"
-            result+="$(_corbon_color host)%m${CORBON_RESET}"
+            [[ -n "$result" ]] &&
+                result+="$(_corbon_paint separator " ")"
+
+            result+="$(_corbon_paint host "%m")"
         fi
+    fi
+
+    if [[ "$EUID" == 0 ]]; then
+        [[ -n "$result" ]] &&
+            result+="$(_corbon_paint separator " ")"
+
+        result+="$(_corbon_paint root "${CORBON_SYMBOL[root]}" root)"
     fi
 
     [[ -n "$result" ]] &&
@@ -421,18 +617,21 @@ _corbon_path_segment() {
         fi
     fi
 
-    local color="$(_corbon_color path)"
+    local color="path"
 
     [[ "$path" == "~" || "$path" == "~/"* ]] &&
-        color="$(_corbon_color path_home)"
+        color="path_home"
 
-    print -r -- "${color}${path}${CORBON_RESET}"
+    [[ "$PWD" == "/" ]] &&
+        color="path_root"
+
+    print -r -- "$(_corbon_paint "$color" "$path")"
 }
 
 _corbon_python_segment() {
     [[ -n "$VIRTUAL_ENV" ]] || return
 
-    print -r -- "$(_corbon_color python)py:${VIRTUAL_ENV:t}${CORBON_RESET}"
+    print -r -- "$(_corbon_paint python "py:${VIRTUAL_ENV:t}")"
 }
 
 _corbon_node_segment() {
@@ -449,20 +648,20 @@ _corbon_node_segment() {
 
     [[ -n "$version" ]] || return
 
-    print -r -- "$(_corbon_color node)node:${version}${CORBON_RESET}"
+    print -r -- "$(_corbon_paint node "node:${version}")"
 }
 
 _corbon_duration_segment() {
     [[ "$CORBON_SHOW_DURATION" == true ]] || return
     (( CORBON_LAST_DURATION >= CORBON_DURATION_THRESHOLD )) || return
 
-    print -r -- "$(_corbon_color duration)${CORBON_LAST_DURATION}s${CORBON_RESET}"
+    print -r -- "$(_corbon_paint duration "${CORBON_LAST_DURATION}s")"
 }
 
 _corbon_time_segment() {
     [[ "$CORBON_SHOW_TIME" == true ]] || return
 
-    print -r -- "$(_corbon_color time)$(strftime "$CORBON_TIME_FORMAT")${CORBON_RESET}"
+    print -r -- "$(_corbon_paint time "$(strftime "$CORBON_TIME_FORMAT")")"
 }
 
 _corbon_render_segment() {
@@ -479,13 +678,27 @@ _corbon_render_segment() {
     fi
 
     case "$segment" in
-        context)    _corbon_context_segment ;;
-        path)       _corbon_path_segment ;;
-        git)        _corbon_git_segment ;;
-        python)     _corbon_python_segment ;;
-        node)       _corbon_node_segment ;;
-        duration)   _corbon_duration_segment ;;
-        time)       _corbon_time_segment ;;
+        context)
+            _corbon_context_segment
+            ;;
+        path)
+            _corbon_path_segment
+            ;;
+        git)
+            _corbon_git_segment
+            ;;
+        python)
+            _corbon_python_segment
+            ;;
+        node)
+            _corbon_node_segment
+            ;;
+        duration)
+            _corbon_duration_segment
+            ;;
+        time)
+            _corbon_time_segment
+            ;;
     esac
 }
 
@@ -526,11 +739,11 @@ _corbon_precmd() {
         PROMPT="$left"
 
         if (( CORBON_LAST_EXIT != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
-            PROMPT+=" $(_corbon_color error)${CORBON_LAST_EXIT}${CORBON_RESET}"
+            PROMPT+=" $(_corbon_paint exit_error "${CORBON_LAST_EXIT}" error)"
         fi
 
         PROMPT+=$'\n'
-        PROMPT+="$(_corbon_color prompt)${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+        PROMPT+="$(_corbon_paint prompt "${CORBON_SYMBOL[prompt]}" prompt) "
 
         RPROMPT="$right"
     else
@@ -540,10 +753,10 @@ _corbon_precmd() {
             PROMPT+="${CORBON_SEPARATOR}${right}"
 
         if (( CORBON_LAST_EXIT != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
-            PROMPT+=" $(_corbon_color error)${CORBON_LAST_EXIT}${CORBON_RESET}"
+            PROMPT+=" $(_corbon_paint exit_error "${CORBON_LAST_EXIT}" error)"
         fi
 
-        PROMPT+=" $(_corbon_color prompt)${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+        PROMPT+=" $(_corbon_paint prompt "${CORBON_SYMBOL[prompt]}" prompt) "
         RPROMPT=""
     fi
 }
@@ -553,5 +766,5 @@ autoload -Uz add-zsh-hook
 add-zsh-hook preexec _corbon_preexec
 add-zsh-hook precmd _corbon_precmd
 
-PROMPT="$(_corbon_color prompt)${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+PROMPT="$(_corbon_paint prompt "${CORBON_SYMBOL[prompt]}" prompt) "
 RPROMPT=""
