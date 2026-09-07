@@ -1,16 +1,9 @@
-# Corbon ZSH Theme
-# https://github.com/spideythedev/corbon-zsh-theme
-
-typeset -g CORBON_VERSION="0.1.0"
-
-# ─────────────────────────────────────
-# Defaults
-# ─────────────────────────────────────
+typeset -g CORBON_VERSION="0.2.0"
 
 : ${CORBON_LAYOUT:="two-line"}
 
-: ${CORBON_LEFT:="context path git"}
-: ${CORBON_RIGHT:="python node duration time"}
+: ${CORBON_LEFT:=(context path git)}
+: ${CORBON_RIGHT:=(python node duration time)}
 
 : ${CORBON_SEPARATOR:="  "}
 : ${CORBON_PROMPT_SYMBOL:="❯"}
@@ -22,7 +15,6 @@ typeset -g CORBON_VERSION="0.1.0"
 
 : ${CORBON_PATH_STYLE:="smart"}
 : ${CORBON_PATH_MAX:=4}
-: ${CORBON_PATH_TRUNCATE:="…"}
 
 : ${CORBON_GIT_BRANCH:=true}
 : ${CORBON_GIT_STATUS:=true}
@@ -50,92 +42,101 @@ typeset -g CORBON_VERSION="0.1.0"
 : ${CORBON_COLOR_ACCENT:="%F{yellow}"}
 : ${CORBON_RESET:="%f"}
 
-# ─────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────
+typeset -g CORBON_COMMAND_STARTED=0
+typeset -g CORBON_LAST_DURATION=0
+typeset -g CORBON_LAST_EXIT=0
 
 _corbon_git_root() {
-    git rev-parse --show-toplevel 2>/dev/null
+    git rev-parse --show-toplevel >/dev/null 2>&1
 }
 
 _corbon_git_branch() {
-    git symbolic-ref --short HEAD 2>/dev/null ||
+    git symbolic-ref --quiet --short HEAD 2>/dev/null ||
         git rev-parse --short HEAD 2>/dev/null
 }
 
 _corbon_git_status() {
-    local status
-
-    status="$(git status --porcelain=v1 2>/dev/null)" || return
-
-    if [[ -z "$status" ]]; then
-        print -r -- "${CORBON_GIT_CLEAN_SYMBOL}"
-        return
-    fi
-
+    local line
     local result=""
 
-    if print -r -- "$status" | grep -q '^.[MADRCU]'; then
-        result+="${CORBON_GIT_STAGED_SYMBOL}"
-    fi
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
 
-    if print -r -- "$status" | grep -q '^.[MDU]'; then
-        result+="${CORBON_GIT_DIRTY_SYMBOL}"
-    fi
+        case "${line[1,2]}" in
+            UU|AA|DD|AU|UA)
+                result+="${CORBON_GIT_CONFLICT_SYMBOL}"
+                ;;
+            \?\?)
+                result+="${CORBON_GIT_UNTRACKED_SYMBOL}"
+                ;;
+            *)
+                [[ "${line[1]}" != " " ]] &&
+                    result+="${CORBON_GIT_STAGED_SYMBOL}"
 
-    if print -r -- "$status" | grep -q '^??'; then
-        result+="${CORBON_GIT_UNTRACKED_SYMBOL}"
-    fi
+                [[ "${line[2]}" != " " ]] &&
+                    result+="${CORBON_GIT_DIRTY_SYMBOL}"
+                ;;
+        esac
+    done < <(git status --porcelain=v1 2>/dev/null)
 
-    if print -r -- "$status" | grep -q '^[U][U]'; then
-        result+="${CORBON_GIT_CONFLICT_SYMBOL}"
-    fi
+    [[ -z "$result" ]] &&
+        result="${CORBON_GIT_CLEAN_SYMBOL}"
 
     print -r -- "$result"
 }
 
 _corbon_git_segment() {
-    _corbon_git_root >/dev/null || return
+    _corbon_git_root || return
 
-    local branch status ahead behind result
+    local branch=""
+    local status=""
+    local result=""
+    local ahead=0
+    local behind=0
 
-    branch="$(_corbon_git_branch)"
-    status="$(_corbon_git_status)"
+    if [[ "$CORBON_GIT_BRANCH" == true ]]; then
+        branch="$(_corbon_git_branch)"
+        result="$branch"
+    fi
 
-    result="${branch}"
+    if [[ "$CORBON_GIT_STATUS" == true ]]; then
+        status="$(_corbon_git_status)"
 
-    if [[ -n "$status" && "$CORBON_GIT_STATUS" == true ]]; then
-        result+=" ${status}"
+        [[ -n "$status" ]] &&
+            result+="${result:+ }${status}"
     fi
 
     if [[ "$CORBON_GIT_AHEAD_BEHIND" == true ]]; then
-        ahead="$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null)"
-        behind="$(git rev-list --count 'HEAD..@{upstream}' 2>/dev/null)"
+        ahead="$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null)" || ahead=0
+        behind="$(git rev-list --count 'HEAD..@{upstream}' 2>/dev/null)" || behind=0
 
-        [[ "$ahead" -gt 0 ]] 2>/dev/null && result+=" ↑${ahead}"
-        [[ "$behind" -gt 0 ]] 2>/dev/null && result+=" ↓${behind}"
+        (( ahead > 0 )) &&
+            result+=" ↑${ahead}"
+
+        (( behind > 0 )) &&
+            result+=" ↓${behind}"
     fi
 
-    print -r -- "${CORBON_COLOR_GIT}${result}${CORBON_RESET}"
+    [[ -n "$result" ]] &&
+        print -r -- "${CORBON_COLOR_GIT}${result}${CORBON_RESET}"
 }
 
 _corbon_context_segment() {
-    local context=""
+    local result=""
 
     if [[ "$CORBON_SHOW_USER" == true ]]; then
-        context+="${CORBON_COLOR_USER}%n${CORBON_RESET}"
+        result+="${CORBON_COLOR_USER}%n${CORBON_RESET}"
     fi
 
     if [[ "$CORBON_SHOW_HOST" == true ]]; then
-        if [[ "$CORBON_SHOW_HOST" == "ssh" && -z "$SSH_CONNECTION" ]]; then
-            :
-        else
-            context+="${CORBON_COLOR_MUTED}@${CORBON_RESET}"
-            context+="${CORBON_COLOR_HOST}%m${CORBON_RESET}"
+        if [[ "$CORBON_SHOW_HOST" != "ssh" || -n "$SSH_CONNECTION" ]]; then
+            result+="${CORBON_COLOR_MUTED}@${CORBON_RESET}"
+            result+="${CORBON_COLOR_HOST}%m${CORBON_RESET}"
         fi
     fi
 
-    print -r -- "$context"
+    [[ -n "$result" ]] &&
+        print -r -- "$result"
 }
 
 _corbon_path_segment() {
@@ -159,40 +160,29 @@ _corbon_path_segment() {
 }
 
 _corbon_python_segment() {
-    command -v python >/dev/null 2>&1 || return
+    [[ -n "$VIRTUAL_ENV" ]] || return
 
-    local version
-
-    version="$(python --version 2>/dev/null | awk '{print $2}')" || return
-
-    [[ -n "$VIRTUAL_ENV" ]] &&
-        print -r -- "${CORBON_COLOR_MUTED}py:${version}${CORBON_RESET}"
+    print -r -- "${CORBON_COLOR_MUTED}py:${VIRTUAL_ENV:t}${CORBON_RESET}"
 }
 
 _corbon_node_segment() {
-    command -v node >/dev/null 2>&1 || return
+    [[ -n "$NODE_VERSION" ]] || return
 
-    local version
-
-    version="$(node --version 2>/dev/null)" || return
-
-    print -r -- "${CORBON_COLOR_MUTED}node:${version#v}${CORBON_RESET}"
+    print -r -- "${CORBON_COLOR_MUTED}node:${NODE_VERSION}${CORBON_RESET}"
 }
 
 _corbon_duration_segment() {
     [[ "$CORBON_SHOW_DURATION" == true ]] || return
 
-    local elapsed="${CORBON_LAST_DURATION:-0}"
+    (( CORBON_LAST_DURATION >= CORBON_DURATION_THRESHOLD )) || return
 
-    (( elapsed >= CORBON_DURATION_THRESHOLD )) || return
-
-    print -r -- "${CORBON_COLOR_MUTED}${elapsed}s${CORBON_RESET}"
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_LAST_DURATION}s${CORBON_RESET}"
 }
 
 _corbon_time_segment() {
     [[ "$CORBON_SHOW_TIME" == true ]] || return
 
-    print -r -- "${CORBON_COLOR_MUTED}$(date +"$CORBON_TIME_FORMAT")${CORBON_RESET}"
+    print -r -- "${CORBON_COLOR_MUTED}$(strftime "$CORBON_TIME_FORMAT")${CORBON_RESET}"
 }
 
 _corbon_render_segment() {
@@ -208,61 +198,61 @@ _corbon_render_segment() {
 }
 
 _corbon_render_list() {
-    local list="$1"
     local segment
-    local output=()
     local value
+    local output=()
 
-    for segment in ${(z)list}; do
+    for segment in "${(@)1}"; do
         value="$(_corbon_render_segment "$segment")"
 
-        [[ -n "$value" ]] && output+=("$value")
+        [[ -n "$value" ]] &&
+            output+=("$value")
     done
 
     print -r -- "${(j:$CORBON_SEPARATOR:)output}"
 }
 
-# ─────────────────────────────────────
-# Prompt
-# ─────────────────────────────────────
+_corbon_preexec() {
+    CORBON_COMMAND_STARTED=$SECONDS
+}
 
 _corbon_precmd() {
-    local exit_code=$?
+    CORBON_LAST_EXIT=$?
 
-    CORBON_LAST_DURATION=$SECONDS
-    SECONDS=0
-
-    local left right prompt
-
-    left="$(_corbon_render_list "$CORBON_LEFT")"
-    right="$(_corbon_render_list "$CORBON_RIGHT")"
-
-    if [[ "$CORBON_LAYOUT" == "one-line" ]]; then
-        prompt="${left}"
-
-        [[ -n "$right" ]] &&
-            prompt+="  ${right}"
-
-        prompt+="\n${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+    if (( CORBON_COMMAND_STARTED > 0 )); then
+        CORBON_LAST_DURATION=$((SECONDS - CORBON_COMMAND_STARTED))
     else
-        prompt="${left}"
-
-        [[ -n "$right" ]] &&
-            prompt+="  ${right}"
-
-        prompt+="\n"
-
-        if (( exit_code != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
-            prompt+="${CORBON_COLOR_ERROR}${exit_code}${CORBON_RESET} "
-        fi
-
-        prompt+="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+        CORBON_LAST_DURATION=0
     fi
+
+    CORBON_COMMAND_STARTED=0
+
+    local left="$(_corbon_render_list "${CORBON_LEFT}")"
+    local right="$(_corbon_render_list "${CORBON_RIGHT}")"
+    local prompt="$left"
+
+    if [[ -n "$right" ]]; then
+        prompt+="${CORBON_SEPARATOR}${right}"
+    fi
+
+    if [[ "$CORBON_LAYOUT" == "two-line" ]]; then
+        prompt+="\n"
+    else
+        prompt+=" "
+    fi
+
+    if (( CORBON_LAST_EXIT != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
+        prompt+="${CORBON_COLOR_ERROR}${CORBON_LAST_EXIT}${CORBON_RESET} "
+    fi
+
+    prompt+="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
 
     PROMPT="$prompt"
 }
 
 autoload -Uz add-zsh-hook
+
+add-zsh-hook preexec _corbon_preexec
 add-zsh-hook precmd _corbon_precmd
 
-PROMPT="%F{yellow}❯%f "
+PROMPT="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
