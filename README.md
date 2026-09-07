@@ -1,492 +1,308 @@
-<details>
-<summary>1, 2, 3 — CORBONNNNNNN. 🔥</summary>
-
-Let's actually start the repo with a working lightweight core, not a mockup.
-
-I’d start with these 3 files:
-
-corbon-zsh-theme/
-├── corbon.zsh-theme
-├── corbon.config.zsh
-└── README.md
-
-## 1. corbon.zsh-theme
-
-~~~zsh
-# Corbon ZSH Theme
-# https://github.com/spideythedev/corbon-zsh-theme
-
-typeset -g CORBON_VERSION="0.1.0"
-
-: ${CORBON_LAYOUT:="two-line"}
-
-: ${CORBON_LEFT:="context path git"}
-: ${CORBON_RIGHT:="python node duration time"}
-
-: ${CORBON_SEPARATOR:="  "}
-: ${CORBON_PROMPT_SYMBOL:="❯"}
-: ${CORBON_CONTINUATION_SYMBOL:="·"}
-
-: ${CORBON_SHOW_USER:=true}
-: ${CORBON_SHOW_HOST:="ssh"}
-: ${CORBON_SHOW_EXIT:=true}
-
-: ${CORBON_PATH_STYLE:="smart"}
-: ${CORBON_PATH_MAX:=4}
-: ${CORBON_PATH_TRUNCATE:="…"}
-
-: ${CORBON_GIT_BRANCH:=true}
-: ${CORBON_GIT_STATUS:=true}
-: ${CORBON_GIT_AHEAD_BEHIND:=true}
-
-: ${CORBON_GIT_CLEAN_SYMBOL:="✓"}
-: ${CORBON_GIT_DIRTY_SYMBOL:="±"}
-: ${CORBON_GIT_STAGED_SYMBOL:="+"}
-: ${CORBON_GIT_UNTRACKED_SYMBOL:="?"}
-: ${CORBON_GIT_CONFLICT_SYMBOL:="!"}
-
-: ${CORBON_SHOW_DURATION:=true}
-: ${CORBON_DURATION_THRESHOLD:=1}
-
-: ${CORBON_SHOW_TIME:=false}
-: ${CORBON_TIME_FORMAT:="%H:%M"}
-
-: ${CORBON_COLOR_USER:="%F{white}"}
-: ${CORBON_COLOR_HOST:="%F{cyan}"}
-: ${CORBON_COLOR_PATH:="%F{245}"}
-: ${CORBON_COLOR_GIT:="%F{yellow}"}
-: ${CORBON_COLOR_SUCCESS:="%F{green}"}
-: ${CORBON_COLOR_ERROR:="%F{red}"}
-: ${CORBON_COLOR_MUTED:="%F{242}"}
-: ${CORBON_COLOR_ACCENT:="%F{yellow}"}
-: ${CORBON_RESET:="%f"}
-
-# ─────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────
-
-_corbon_git_root() {
-    git rev-parse --show-toplevel 2>/dev/null
-}
-
-_corbon_git_branch() {
-    git symbolic-ref --short HEAD 2>/dev/null ||
-        git rev-parse --short HEAD 2>/dev/null
-}
-
-_corbon_git_status() {
-    local status
-
-    status="$(git status --porcelain=v1 2>/dev/null)" || return
-
-    if [[ -z "$status" ]]; then
-        print -r -- "${CORBON_GIT_CLEAN_SYMBOL}"
-        return
-    fi
-
-    local result=""
-
-    if print -r -- "$status" | grep -q '^.[MADRCU]'; then
-        result+="${CORBON_GIT_STAGED_SYMBOL}"
-    fi
-
-    if print -r -- "$status" | grep -q '^.[MDU]'; then
-        result+="${CORBON_GIT_DIRTY_SYMBOL}"
-    fi
-
-    if print -r -- "$status" | grep -q '^??'; then
-        result+="${CORBON_GIT_UNTRACKED_SYMBOL}"
-    fi
-
-    if print -r -- "$status" | grep -q '^[U][U]'; then
-        result+="${CORBON_GIT_CONFLICT_SYMBOL}"
-    fi
-
-    print -r -- "$result"
-}
-
-_corbon_git_segment() {
-    _corbon_git_root >/dev/null || return
-
-    local branch status ahead behind result
-
-    branch="$(_corbon_git_branch)"
-    status="$(_corbon_git_status)"
-
-    result="${branch}"
-
-    if [[ -n "$status" && "$CORBON_GIT_STATUS" == true ]]; then
-        result+=" ${status}"
-    fi
-
-    if [[ "$CORBON_GIT_AHEAD_BEHIND" == true ]]; then
-        ahead="$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null)"
-        behind="$(git rev-list --count 'HEAD..@{upstream}' 2>/dev/null)"
-
-        [[ "$ahead" -gt 0 ]] 2>/dev/null && result+=" ↑${ahead}"
-        [[ "$behind" -gt 0 ]] 2>/dev/null && result+=" ↓${behind}"
-    fi
-
-    print -r -- "${CORBON_COLOR_GIT}${result}${CORBON_RESET}"
-}
-
-_corbon_context_segment() {
-    local context=""
-
-    if [[ "$CORBON_SHOW_USER" == true ]]; then
-        context+="${CORBON_COLOR_USER}%n${CORBON_RESET}"
-    fi
-
-    if [[ "$CORBON_SHOW_HOST" == true ]]; then
-        if [[ "$CORBON_SHOW_HOST" == "ssh" && -z "$SSH_CONNECTION" ]]; then
-            :
-        else
-            context+="${CORBON_COLOR_MUTED}@${CORBON_RESET}"
-            context+="${CORBON_COLOR_HOST}%m${CORBON_RESET}"
-        fi
-    fi
-
-    print -r -- "$context"
-}
-
-_corbon_path_segment() {
-    local path="$PWD"
-
-    if [[ "$path" == "$HOME" ]]; then
-        path="~"
-    elif [[ "$path" == "$HOME/"* ]]; then
-        path="~/${path#$HOME/}"
-    fi
-
-    if [[ "$CORBON_PATH_STYLE" == "smart" ]]; then
-        local parts=("${(@s:/:)path}")
-
-        if (( ${#parts[@]} > CORBON_PATH_MAX + 1 )); then
-            path="…/${(j:/:)parts[-$CORBON_PATH_MAX,-1]}"
-        fi
-    fi
-
-    print -r -- "${CORBON_COLOR_PATH}${path}${CORBON_RESET}"
-}
-
-_corbon_python_segment() {
-    command -v python >/dev/null 2>&1 || return
-
-    local version
-
-    version="$(python --version 2>/dev/null | awk '{print $2}')" || return
-
-    [[ -n "$VIRTUAL_ENV" ]] &&
-        print -r -- "${CORBON_COLOR_MUTED}py:${version}${CORBON_RESET}"
-}
-
-_corbon_node_segment() {
-    command -v node >/dev/null 2>&1 || return
-
-    local version
-
-    version="$(node --version 2>/dev/null)" || return
-
-    print -r -- "${CORBON_COLOR_MUTED}node:${version#v}${CORBON_RESET}"
-}
-
-_corbon_duration_segment() {
-    [[ "$CORBON_SHOW_DURATION" == true ]] || return
-
-    local elapsed="${CORBON_LAST_DURATION:-0}"
-
-    (( elapsed >= CORBON_DURATION_THRESHOLD )) || return
-
-    print -r -- "${CORBON_COLOR_MUTED}${elapsed}s${CORBON_RESET}"
-}
-
-_corbon_time_segment() {
-    [[ "$CORBON_SHOW_TIME" == true ]] || return
-
-    print -r -- "${CORBON_COLOR_MUTED}$(date +"$CORBON_TIME_FORMAT")${CORBON_RESET}"
-}
-
-_corbon_render_segment() {
-    case "$1" in
-        context)  _corbon_context_segment ;;
-        path)     _corbon_path_segment ;;
-        git)      _corbon_git_segment ;;
-        python)   _corbon_python_segment ;;
-        node)     _corbon_node_segment ;;
-        duration) _corbon_duration_segment ;;
-        time)     _corbon_time_segment ;;
-    esac
-}
-
-_corbon_render_list() {
-    local list="$1"
-    local segment
-    local output=()
-    local value
-
-    for segment in ${(z)list}; do
-        value="$(_corbon_render_segment "$segment")"
-
-        [[ -n "$value" ]] && output+=("$value")
-    done
-
-    print -r -- "${(j:$CORBON_SEPARATOR:)output}"
-}
-
-# ─────────────────────────────────────
-# Prompt
-# ─────────────────────────────────────
-
-_corbon_precmd() {
-    local exit_code=$?
-
-    CORBON_LAST_DURATION=$SECONDS
-    SECONDS=0
-
-    local left right prompt
-
-    left="$(_corbon_render_list "$CORBON_LEFT")"
-    right="$(_corbon_render_list "$CORBON_RIGHT")"
-
-    if [[ "$CORBON_LAYOUT" == "one-line" ]]; then
-        prompt="${left}"
-
-        [[ -n "$right" ]] &&
-            prompt+="  ${right}"
-
-        prompt+="\n${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
-    else
-        prompt="${left}"
-
-        [[ -n "$right" ]] &&
-            prompt+="  ${right}"
-
-        prompt+="\n"
-
-        if (( exit_code != 0 )) && [[ "$CORBON_SHOW_EXIT" == true ]]; then
-            prompt+="${CORBON_COLOR_ERROR}${exit_code}${CORBON_RESET} "
-        fi
-
-        prompt+="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
-    fi
-
-    PROMPT="$prompt"
-}
-
-autoload -Uz add-zsh-hook
-add-zsh-hook precmd _corbon_precmd
-
-PROMPT="%F{yellow}❯%f "
-~~~
-
-## 2. corbon.config.zsh
-
-This is where Corbon becomes seriously customizable.
-
-~~~zsh
-# Corbon user configuration
-
-# ─────────────────────────────────────
-# Layout
-# ─────────────────────────────────────
-
-CORBON_LAYOUT="two-line"
-
-CORBON_LEFT="context path git"
-CORBON_RIGHT="python node duration time"
-
-CORBON_SEPARATOR="  "
-
-CORBON_PROMPT_SYMBOL="❯"
-CORBON_CONTINUATION_SYMBOL="·"
-
-# ─────────────────────────────────────
-# Context
-# ─────────────────────────────────────
-
-CORBON_SHOW_USER=true
-CORBON_SHOW_HOST="ssh"
-
-# ─────────────────────────────────────
-# Path
-# ─────────────────────────────────────
-
-CORBON_PATH_STYLE="smart"
-CORBON_PATH_MAX=4
-CORBON_PATH_TRUNCATE="…"
-
-# ─────────────────────────────────────
-# Git
-# ─────────────────────────────────────
-
-CORBON_GIT_BRANCH=true
-CORBON_GIT_STATUS=true
-CORBON_GIT_AHEAD_BEHIND=true
-
-CORBON_GIT_CLEAN_SYMBOL="✓"
-CORBON_GIT_DIRTY_SYMBOL="±"
-CORBON_GIT_STAGED_SYMBOL="+"
-CORBON_GIT_UNTRACKED_SYMBOL="?"
-CORBON_GIT_CONFLICT_SYMBOL="!"
-
-# ─────────────────────────────────────
-# Runtime
-# ─────────────────────────────────────
-
-CORBON_SHOW_EXIT=true
-
-CORBON_SHOW_DURATION=true
-CORBON_DURATION_THRESHOLD=1
-
-CORBON_SHOW_TIME=false
-CORBON_TIME_FORMAT="%H:%M"
-
-# ─────────────────────────────────────
-# Colors
-# ─────────────────────────────────────
-
-CORBON_COLOR_USER="%F{white}"
-CORBON_COLOR_HOST="%F{cyan}"
-CORBON_COLOR_PATH="%F{245}"
-
-CORBON_COLOR_GIT="%F{yellow}"
-
-CORBON_COLOR_SUCCESS="%F{green}"
-CORBON_COLOR_ERROR="%F{red}"
-
-CORBON_COLOR_MUTED="%F{242}"
-CORBON_COLOR_ACCENT="%F{yellow}"
-
-CORBON_RESET="%f"
-~~~
-
-## 3. README.md
-
-~~~md
 # Corbon
 
 A lightweight, highly customizable ZSH theme.
 
-Corbon is designed to be fast, clean, dependency-free, and configurable without turning the prompt into a complicated framework.
+Corbon is built around one idea:
+
+> Your prompt should work the way you want.
+
+It gives you control over the layout, segments, Git information, colors, symbols, path display, command timing, and more without turning configuration into a mess.
 
 ## Features
 
 - Lightweight
 - No external dependencies
+- Native ZSH
 - Git integration
 - Smart path display
-- Python environment detection
-- Node.js detection
+- Python virtual environment
+- Node.js environment
 - Command duration
 - Exit status
 - SSH awareness
 - One-line and two-line layouts
-- Custom segments
-- Custom symbols
+- Configurable segment order
 - Custom colors
-- Configurable segment ordering
-- Minimal defaults
-- Native ZSH
+- Custom symbols
+- Custom prompt layout
+- Easy configuration
 
 ## Installation
 
 Clone the repository:
 
-    git clone https://github.com/spideythedev/corbon-zsh-theme.git
+~~~sh
+git clone https://github.com/spideythedev/corbon-zsh-theme.git ~/.corbon
+~~~
 
-Load the theme:
+Load Corbon from your `.zshrc`:
 
-    source /path/to/corbon-zsh-theme/corbon.zsh-theme
+~~~zsh
+source ~/.corbon/corbon.zsh-theme
+~~~
 
-Load your configuration before the theme:
+You can also keep your configuration separate:
 
-    source ~/.config/corbon/config.zsh
-    source /path/to/corbon-zsh-theme/corbon.zsh-theme
+~~~zsh
+source ~/.corbon/corbon.config.zsh
+source ~/.corbon/corbon.zsh-theme
+~~~
+
+Restart ZSH:
+
+~~~sh
+exec zsh
+~~~
 
 ## Configuration
 
-Corbon is designed around configurable segments.
+Corbon is configured directly with ZSH variables.
 
-    CORBON_LEFT="context path git"
-    CORBON_RIGHT="python node duration time"
+For example:
 
-Change the layout:
+~~~zsh
+CORBON_LAYOUT="two-line"
 
-    CORBON_LAYOUT="two-line"
+CORBON_LEFT=(
+    context
+    path
+    git
+)
 
-Or:
+CORBON_RIGHT=(
+    python
+    node
+    duration
+    time
+)
 
-    CORBON_LAYOUT="one-line"
+CORBON_SEPARATOR="  "
+CORBON_PROMPT_SYMBOL="❯"
+~~~
 
-Change the separator:
+The order of the arrays controls the order of the segments.
 
-    CORBON_SEPARATOR=" · "
+## Layout
 
-Change the prompt symbol:
+Corbon supports:
 
-    CORBON_PROMPT_SYMBOL="❯"
+~~~zsh
+CORBON_LAYOUT="one-line"
+~~~
+
+or:
+
+~~~zsh
+CORBON_LAYOUT="two-line"
+~~~
+
+Two-line is the default.
+
+## Segments
+
+Available segments include:
+
+~~~text
+context
+path
+git
+python
+node
+duration
+time
+~~~
+
+You can change them independently:
+
+~~~zsh
+CORBON_LEFT=(
+    path
+    git
+)
+
+CORBON_RIGHT=(
+    node
+    duration
+)
+~~~
+
+You don't need to use every segment.
 
 ## Git
 
-    CORBON_GIT_BRANCH=true
-    CORBON_GIT_STATUS=true
-    CORBON_GIT_AHEAD_BEHIND=true
+Git information can be customized with:
 
-Git symbols are configurable:
+~~~zsh
+CORBON_GIT_BRANCH=true
+CORBON_GIT_STATUS=true
+CORBON_GIT_AHEAD_BEHIND=true
+~~~
 
-    CORBON_GIT_CLEAN_SYMBOL="✓"
-    CORBON_GIT_DIRTY_SYMBOL="±"
-    CORBON_GIT_STAGED_SYMBOL="+"
-    CORBON_GIT_UNTRACKED_SYMBOL="?"
-    CORBON_GIT_CONFLICT_SYMBOL="!"
+Git status symbols are configurable:
+
+~~~zsh
+CORBON_GIT_CLEAN_SYMBOL="✓"
+CORBON_GIT_DIRTY_SYMBOL="±"
+CORBON_GIT_STAGED_SYMBOL="+"
+CORBON_GIT_UNTRACKED_SYMBOL="?"
+CORBON_GIT_CONFLICT_SYMBOL="!"
+~~~
 
 ## Path
 
-    CORBON_PATH_STYLE="smart"
-    CORBON_PATH_MAX=4
+Corbon automatically shortens long paths when smart mode is enabled:
+
+~~~zsh
+CORBON_PATH_STYLE="smart"
+CORBON_PATH_MAX=4
+~~~
+
+For example:
+
+~~~text
+~/projects/corbon/src/theme
+~~~
+
+can become:
+
+~~~text
+…/projects/corbon/src/theme
+~~~
+
+## Command Duration
+
+Long-running commands can display their execution time.
+
+~~~zsh
+CORBON_SHOW_DURATION=true
+CORBON_DURATION_THRESHOLD=1
+~~~
+
+The threshold is measured in seconds.
+
+## Exit Status
+
+Failed commands can display their exit code:
+
+~~~zsh
+CORBON_SHOW_EXIT=true
+~~~
+
+For example:
+
+~~~text
+2 ❯
+~~~
+
+Successful commands don't display an exit code.
 
 ## Colors
 
-Every major part of the prompt can use its own color.
+Every major part of the prompt can have its own color.
 
-    CORBON_COLOR_USER="%F{white}"
-    CORBON_COLOR_HOST="%F{cyan}"
-    CORBON_COLOR_PATH="%F{245}"
-    CORBON_COLOR_GIT="%F{yellow}"
-    CORBON_COLOR_SUCCESS="%F{green}"
-    CORBON_COLOR_ERROR="%F{red}"
-    CORBON_COLOR_MUTED="%F{242}"
-    CORBON_COLOR_ACCENT="%F{yellow}"
+~~~zsh
+CORBON_COLOR_USER="%F{white}"
+CORBON_COLOR_HOST="%F{cyan}"
+CORBON_COLOR_PATH="%F{245}"
+CORBON_COLOR_GIT="%F{yellow}"
+CORBON_COLOR_SUCCESS="%F{green}"
+CORBON_COLOR_ERROR="%F{red}"
+CORBON_COLOR_MUTED="%F{242}"
+CORBON_COLOR_ACCENT="%F{yellow}"
+~~~
+
+Corbon does not force a specific color scheme. The default palette is intentionally simple, but you can completely change it.
+
+## Symbols
+
+The prompt symbol is configurable:
+
+~~~zsh
+CORBON_PROMPT_SYMBOL="❯"
+CORBON_CONTINUATION_SYMBOL="·"
+~~~
+
+Git symbols are configurable as well.
+
+This means Corbon doesn't depend on a fixed visual identity for customization.
+
+## SSH
+
+Host information can be shown only when connected through SSH:
+
+~~~zsh
+CORBON_SHOW_HOST="ssh"
+~~~
+
+Always show it:
+
+~~~zsh
+CORBON_SHOW_HOST=true
+~~~
+
+Disable it:
+
+~~~zsh
+CORBON_SHOW_HOST=false
+~~~
+
+## Example
+
+A simple developer setup:
+
+~~~zsh
+CORBON_LAYOUT="two-line"
+
+CORBON_LEFT=(
+    context
+    path
+    git
+)
+
+CORBON_RIGHT=(
+    python
+    node
+    duration
+)
+
+CORBON_SEPARATOR="  "
+
+CORBON_PROMPT_SYMBOL="❯"
+
+CORBON_COLOR_ACCENT="%F{yellow}"
+CORBON_COLOR_GIT="%F{yellow}"
+CORBON_COLOR_PATH="%F{245}"
+CORBON_COLOR_MUTED="%F{242}"
+~~~
 
 ## Philosophy
 
-Corbon should stay small.
+Corbon is intentionally small.
 
-Customization should come from configuration, not unnecessary framework code.
+It shouldn't require a framework, plugin manager, configuration generator, or a collection of external dependencies just to render a shell prompt.
 
-The default experience is intentionally simple. Users can progressively add the information they actually want.
+The goal is simple:
+
+**Fast by default. Configurable when you need it. Out of your way when you don't.**
+
+## Development
+
+Clone the repository:
+
+~~~sh
+git clone https://github.com/spideythedev/corbon-zsh-theme.git
+cd corbon-zsh-theme
+~~~
+
+Test the theme directly:
+
+~~~sh
+zsh
+source ./corbon.zsh-theme
+~~~
 
 ## License
 
 MIT
-~~~
 
-One correction before we continue: **I would not merge this into the final repo yet.**
-
-This is **Corbon v0.1 foundation**. Next I'd tighten the segment API, eliminate avoidable subprocesses like `grep` and `date` where practical, add proper command-duration tracking, and then build the **signature Corbon appearance**.
-
-The goal is not merely:
-
-    a ZSH theme that works
-
-It's:
-
-    CORBON
-    lightweight prompt engine
-    ═══════════════════════════
-    simple by default
-    insane when customized
-
-**1. Core. 2. Config. 3. Corbon.**
-
-</details>
+Copyright © 2026 Fahad Malik
