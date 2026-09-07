@@ -328,3 +328,196 @@ add-zsh-hook preexec _corbon_preexec
 add-zsh-hook precmd _corbon_precmd
 
 PROMPT="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+
+typeset -g CORBON_ICON_DOCKER="docker:"
+typeset -g CORBON_ICON_KUBERNETES="k8s:"
+typeset -g CORBON_ICON_AWS="aws:"
+typeset -g CORBON_ICON_GCP="gcp:"
+typeset -g CORBON_ICON_AZURE="az:"
+typeset -g CORBON_ICON_GO="go:"
+typeset -g CORBON_ICON_RUST="rs:"
+typeset -g CORBON_ICON_JAVA="java:"
+typeset -g CORBON_ICON_RUBY="rb:"
+typeset -g CORBON_ICON_OS="os:"
+typeset -g CORBON_ICON_ARCH="arch:"
+typeset -g CORBON_ICON_JOBS="jobs:"
+typeset -g CORBON_ICON_ROOT="root:"
+typeset -g CORBON_ICON_CONTAINER="container:"
+
+: ${CORBON_SHOW_DOCKER:=false}
+: ${CORBON_SHOW_KUBERNETES:=false}
+: ${CORBON_SHOW_AWS:=false}
+: ${CORBON_SHOW_GCP:=false}
+: ${CORBON_SHOW_AZURE:=false}
+: ${CORBON_SHOW_GO:=false}
+: ${CORBON_SHOW_RUST:=false}
+: ${CORBON_SHOW_JAVA:=false}
+: ${CORBON_SHOW_RUBY:=false}
+: ${CORBON_SHOW_OS:=false}
+: ${CORBON_SHOW_ARCH:=false}
+: ${CORBON_SHOW_JOBS:=true}
+: ${CORBON_SHOW_ROOT:=true}
+: ${CORBON_SHOW_CONTAINER:=true}
+
+_corbon_docker_segment() {
+    [[ "$CORBON_SHOW_DOCKER" == true ]] || return
+    command -v docker >/dev/null 2>&1 || return
+
+    local context
+    context="$(docker context show 2>/dev/null)" || return
+
+    [[ "$context" == "default" ]] && return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_DOCKER}${context}${CORBON_RESET}"
+}
+
+_corbon_kubernetes_segment() {
+    [[ "$CORBON_SHOW_KUBERNETES" == true ]] || return
+    command -v kubectl >/dev/null 2>&1 || return
+
+    local context namespace
+
+    context="$(kubectl config current-context 2>/dev/null)" || return
+    namespace="$(kubectl config view --minify --output 'jsonpath={..namespace}' 2>/dev/null)"
+
+    [[ -z "$namespace" ]] && namespace="default"
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_KUBERNETES}${context}:${namespace}${CORBON_RESET}"
+}
+
+_corbon_aws_segment() {
+    [[ "$CORBON_SHOW_AWS" == true ]] || return
+    [[ -n "$AWS_PROFILE" ]] || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_AWS}${AWS_PROFILE}${CORBON_RESET}"
+}
+
+_corbon_gcp_segment() {
+    [[ "$CORBON_SHOW_GCP" == true ]] || return
+
+    local project="${CLOUDSDK_CORE_PROJECT:-$GCLOUD_PROJECT}"
+
+    [[ -n "$project" ]] || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_GCP}${project}${CORBON_RESET}"
+}
+
+_corbon_azure_segment() {
+    [[ "$CORBON_SHOW_AZURE" == true ]] || return
+    [[ -n "$AZURE_SUBSCRIPTION_ID" ]] || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_AZURE}${AZURE_SUBSCRIPTION_ID}${CORBON_RESET}"
+}
+
+_corbon_go_segment() {
+    [[ "$CORBON_SHOW_GO" == true ]] || return
+    command -v go >/dev/null 2>&1 || return
+
+    [[ -f go.mod ]] || return
+
+    local version
+    version="$(go version 2>/dev/null)" || return
+    version="${version#go version go}"
+    version="${version%% *}"
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_GO}${version}${CORBON_RESET}"
+}
+
+_corbon_rust_segment() {
+    [[ "$CORBON_SHOW_RUST" == true ]] || return
+    command -v rustc >/dev/null 2>&1 || return
+
+    [[ -f Cargo.toml ]] || return
+
+    local version
+    version="$(rustc --version 2>/dev/null)" || return
+    version="${version#rustc }"
+    version="${version%% *}"
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_RUST}${version}${CORBON_RESET}"
+}
+
+_corbon_java_segment() {
+    [[ "$CORBON_SHOW_JAVA" == true ]] || return
+    command -v java >/dev/null 2>&1 || return
+
+    [[ -f pom.xml || -f build.gradle || -f build.gradle.kts || -f settings.gradle ]] || return
+
+    local version
+    version="$(java -version 2>&1 | head -n 1)" || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_JAVA}${version}${CORBON_RESET}"
+}
+
+_corbon_ruby_segment() {
+    [[ "$CORBON_SHOW_RUBY" == true ]] || return
+    command -v ruby >/dev/null 2>&1 || return
+
+    [[ -f Gemfile || -f .ruby-version ]] || return
+
+    local version
+    version="$(ruby --version 2>/dev/null)" || return
+    version="${version#ruby }"
+    version="${version%% *}"
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_RUBY}${version}${CORBON_RESET}"
+}
+
+_corbon_os_segment() {
+    [[ "$CORBON_SHOW_OS" == true ]] || return
+
+    local os="${OSTYPE}"
+
+    case "$os" in
+        darwin*)
+            os="macOS"
+            ;;
+        linux*)
+            os="Linux"
+            ;;
+        freebsd*)
+            os="FreeBSD"
+            ;;
+        *)
+            os="${os%%-*}"
+            ;;
+    esac
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_OS}${os}${CORBON_RESET}"
+}
+
+_corbon_arch_segment() {
+    [[ "$CORBON_SHOW_ARCH" == true ]] || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_ARCH}${CPU_ARCH:-${MACHTYPE%%-*}}${CORBON_RESET}"
+}
+
+_corbon_jobs_segment() {
+    [[ "$CORBON_SHOW_JOBS" == true ]] || return
+
+    local jobs="${#jobstates}"
+
+    (( jobs > 0 )) || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_JOBS}${jobs}${CORBON_RESET}"
+}
+
+_corbon_root_segment() {
+    [[ "$CORBON_SHOW_ROOT" == true ]] || return
+    (( EUID == 0 )) || return
+
+    print -r -- "${CORBON_COLOR_ERROR}${CORBON_ICON_ROOT}${CORBON_RESET}"
+}
+
+_corbon_container_segment() {
+    [[ "$CORBON_SHOW_CONTAINER" == true ]] || return
+
+    if [[ -n "$container" ]]; then
+        print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_CONTAINER}${container}${CORBON_RESET}"
+        return
+    fi
+
+    [[ -f /.dockerenv ]] || return
+
+    print -r -- "${CORBON_COLOR_MUTED}${CORBON_ICON_CONTAINER}docker${CORBON_RESET}"
+}
