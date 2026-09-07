@@ -230,6 +230,44 @@ _corbon_render_segment() {
             _corbon_time_segment
             ;;
     esac
+
+_corbon_render_segment() {
+    local segment="$1"
+
+    if [[ "$segment" == custom:* ]]; then
+        local name="${segment#custom:}"
+        local function="${CORBON_SEGMENTS[$name]}"
+
+        [[ -n "$function" ]] || return
+
+        "$function"
+        return
+    fi
+
+    case "$segment" in
+        context)     _corbon_context_segment ;;
+        path)        _corbon_path_segment ;;
+        git)         _corbon_git_segment ;;
+        python)      _corbon_python_segment ;;
+        node)        _corbon_node_segment ;;
+        duration)    _corbon_duration_segment ;;
+        time)        _corbon_time_segment ;;
+        docker)      _corbon_docker_segment ;;
+        kubernetes)  _corbon_kubernetes_segment ;;
+        aws)         _corbon_aws_segment ;;
+        gcp)         _corbon_gcp_segment ;;
+        azure)       _corbon_azure_segment ;;
+        go)          _corbon_go_segment ;;
+        rust)        _corbon_rust_segment ;;
+        java)        _corbon_java_segment ;;
+        ruby)        _corbon_ruby_segment ;;
+        os)          _corbon_os_segment ;;
+        arch)        _corbon_arch_segment ;;
+        jobs)        _corbon_jobs_segment ;;
+        root)        _corbon_root_segment ;;
+        container)   _corbon_container_segment ;;
+    esac
+}
 }
 
 _corbon_render_list() {
