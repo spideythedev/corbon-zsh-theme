@@ -1,4 +1,5 @@
-typeset -g CORBON_VERSION="0.2.0"
+typeset -g CORBON_VERSION="0.3.0"
+typeset -gA CORBON_SEGMENTS
 
 : ${CORBON_LAYOUT:="two-line"}
 
@@ -45,6 +46,15 @@ typeset -g CORBON_VERSION="0.2.0"
 typeset -g CORBON_COMMAND_STARTED=0
 typeset -g CORBON_LAST_DURATION=0
 typeset -g CORBON_LAST_EXIT=0
+
+corbon_segment() {
+    local name="$1"
+    local function="$2"
+
+    [[ -n "$name" && -n "$function" ]] || return 1
+
+    CORBON_SEGMENTS[$name]="$function"
+}
 
 _corbon_git_root() {
     git rev-parse --show-toplevel >/dev/null 2>&1
@@ -173,7 +183,6 @@ _corbon_node_segment() {
 
 _corbon_duration_segment() {
     [[ "$CORBON_SHOW_DURATION" == true ]] || return
-
     (( CORBON_LAST_DURATION >= CORBON_DURATION_THRESHOLD )) || return
 
     print -r -- "${CORBON_COLOR_MUTED}${CORBON_LAST_DURATION}s${CORBON_RESET}"
@@ -186,14 +195,40 @@ _corbon_time_segment() {
 }
 
 _corbon_render_segment() {
-    case "$1" in
-        context)  _corbon_context_segment ;;
-        path)     _corbon_path_segment ;;
-        git)      _corbon_git_segment ;;
-        python)   _corbon_python_segment ;;
-        node)     _corbon_node_segment ;;
-        duration) _corbon_duration_segment ;;
-        time)     _corbon_time_segment ;;
+    local segment="$1"
+
+    if [[ "$segment" == custom:* ]]; then
+        local name="${segment#custom:}"
+        local function="${CORBON_SEGMENTS[$name]}"
+
+        [[ -n "$function" ]] || return
+
+        "$function"
+        return
+    fi
+
+    case "$segment" in
+        context)
+            _corbon_context_segment
+            ;;
+        path)
+            _corbon_path_segment
+            ;;
+        git)
+            _corbon_git_segment
+            ;;
+        python)
+            _corbon_python_segment
+            ;;
+        node)
+            _corbon_node_segment
+            ;;
+        duration)
+            _corbon_duration_segment
+            ;;
+        time)
+            _corbon_time_segment
+            ;;
     esac
 }
 
@@ -231,9 +266,8 @@ _corbon_precmd() {
     local right="$(_corbon_render_list "${CORBON_RIGHT}")"
     local prompt="$left"
 
-    if [[ -n "$right" ]]; then
+    [[ -n "$right" ]] &&
         prompt+="${CORBON_SEPARATOR}${right}"
-    fi
 
     if [[ "$CORBON_LAYOUT" == "two-line" ]]; then
         prompt+="\n"
@@ -256,56 +290,3 @@ add-zsh-hook preexec _corbon_preexec
 add-zsh-hook precmd _corbon_precmd
 
 PROMPT="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
-
-typeset -gA CORBON_SEGMENTS
-
-corbon_segment() {
-    local name="$1"
-    local function="$2"
-
-    [[ -n "$name" && -n "$function" ]] || return 1
-
-    CORBON_SEGMENTS[$name]="$function"
-}
-
-_corbon_render_custom_segment() {
-    local name="$1"
-    local function="${CORBON_SEGMENTS[$name]}"
-
-    [[ -n "$function" ]] || return
-
-    "$function"
-}
-
-_corbon_render_segment() {
-    local segment="$1"
-
-    if [[ "$segment" == custom:* ]]; then
-        _corbon_render_custom_segment "${segment#custom:}"
-        return
-    fi
-
-    case "$segment" in
-        context)
-            _corbon_context_segment
-            ;;
-        path)
-            _corbon_path_segment
-            ;;
-        git)
-            _corbon_git_segment
-            ;;
-        python)
-            _corbon_python_segment
-            ;;
-        node)
-            _corbon_node_segment
-            ;;
-        duration)
-            _corbon_duration_segment
-            ;;
-        time)
-            _corbon_time_segment
-            ;;
-    esac
-}
