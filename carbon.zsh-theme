@@ -256,3 +256,56 @@ add-zsh-hook preexec _corbon_preexec
 add-zsh-hook precmd _corbon_precmd
 
 PROMPT="${CORBON_COLOR_ACCENT}${CORBON_PROMPT_SYMBOL}${CORBON_RESET} "
+
+typeset -gA CORBON_SEGMENTS
+
+corbon_segment() {
+    local name="$1"
+    local function="$2"
+
+    [[ -n "$name" && -n "$function" ]] || return 1
+
+    CORBON_SEGMENTS[$name]="$function"
+}
+
+_corbon_render_custom_segment() {
+    local name="$1"
+    local function="${CORBON_SEGMENTS[$name]}"
+
+    [[ -n "$function" ]] || return
+
+    "$function"
+}
+
+_corbon_render_segment() {
+    local segment="$1"
+
+    if [[ "$segment" == custom:* ]]; then
+        _corbon_render_custom_segment "${segment#custom:}"
+        return
+    fi
+
+    case "$segment" in
+        context)
+            _corbon_context_segment
+            ;;
+        path)
+            _corbon_path_segment
+            ;;
+        git)
+            _corbon_git_segment
+            ;;
+        python)
+            _corbon_python_segment
+            ;;
+        node)
+            _corbon_node_segment
+            ;;
+        duration)
+            _corbon_duration_segment
+            ;;
+        time)
+            _corbon_time_segment
+            ;;
+    esac
+}
