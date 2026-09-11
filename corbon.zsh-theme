@@ -317,9 +317,9 @@ _corbon_git_branch() {
 }
 
 _corbon_git_status() {
-  local status line x y
+  local git_status line x y
 
-  status="$(git status --porcelain=v1 --branch 2>/dev/null)" || return
+  git_status="$(git status --porcelain=v1 --branch 2>/dev/null)" || return
 
   local staged=0
   local unstaged=0
@@ -345,7 +345,7 @@ _corbon_git_status() {
 
     [[ "$x" != " " ]] && ((staged++))
     [[ "$y" != " " ]] && ((unstaged++))
-  done <<< "$status"
+  done <<< "$git_status"
 
   local result=""
 
@@ -372,11 +372,11 @@ _corbon_git_ahead_behind() {
 }
 
 _corbon_segment_git() {
-  local branch status ahead
+  local branch git_status ahead
 
   branch="$(_corbon_git_branch)" || return
 
-  status="$(_corbon_git_status)"
+  git_status="$(_corbon_git_status)"
   ahead="$(_corbon_git_ahead_behind)"
 
   _corbon_color git_branch
@@ -384,11 +384,11 @@ _corbon_segment_git() {
 
   print -Pn " $(_corbon_symbol git) $branch"
 
-  if [[ -z "$status" && -z "$ahead" ]]; then
+  if [[ -z "$git_status" && -z "$ahead" ]]; then
     _corbon_color git_clean
     print -Pn " $(_corbon_symbol git_clean)"
   else
-    [[ -n "$status" ]] && print -Pn "$status"
+    [[ -n "$git_status" ]] && print -Pn "$git_status"
     [[ -n "$ahead" ]] && _corbon_paint git_ahead "$ahead"
   fi
 
@@ -855,8 +855,8 @@ _corbon_detect_color_mode() {
 _corbon_install_hooks() {
   autoload -Uz add-zsh-hook
 
-  add-zsh-hook preexec _corbon_preexec
-  add-zsh-hook precmd _corbon_precmd
+  preexec_functions+=(_corbon_preexec)
+  precmd_functions+=(_corbon_precmd)
 }
 
 _corbon_init() {
