@@ -2,7 +2,7 @@
 # Lightweight, configurable ZSH prompt engine
 # MIT License © 2026 Fahad Malik
 
-CORBON_VERSION="1.1.0"
+CORBON_VERSION="1.1.0" 
 
 typeset -gA CORBON_SEGMENTS
 typeset -gA CORBON_PALETTE
