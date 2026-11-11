@@ -2,7 +2,9 @@
 # Lightweight, configurable ZSH prompt engine
 # MIT License © 2026 Fahad Malik
 
-CORBON_VERSION="1.1.0" 
+CORBON_VERSION="1.1.0"
+
+setopt PROMPT_SUBST
 
 typeset -gA CORBON_SEGMENTS
 typeset -gA CORBON_PALETTE
@@ -67,6 +69,8 @@ CORBON_RIGHT=(
   jobs
   time
 )
+
+typeset -ga CORBON_ADAPTIVE_RIGHT
 
 CORBON_PALETTE=(
   bg "#0D0F12"
@@ -352,35 +356,28 @@ _corbon_git_status() {
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
 
-    x="${line[1]}"
-    y="${line[2]}"
+    x="${line[1,1]}"
+    y="${line[2,2]}"
 
     if [[ "$x" == "?" && "$y" == "?" ]]; then
-      (( untracked++ ))
+      untracked=$(( untracked + 1 ))
       continue
     fi
 
     case "$x$y" in
       UU|AA|DD|AU|UA|DU|UD)
-        (( conflict++ ))
+        conflict=$(( conflict + 1 ))
         ;;
     esac
 
-    [[ "$x" != " " ]] && (( staged++ ))
-    [[ "$y" != " " ]] && (( unstaged++ ))
+    [[ "$x" != " " ]] && staged=$(( staged + 1 ))
+    [[ "$y" != " " ]] && unstaged=$(( unstaged + 1 ))
   done <<< "$git_output"
 
-  (( conflict > 0 )) &&
-    result+=" $(_corbon_symbol git_conflict)$conflict"
-
-  (( staged > 0 )) &&
-    result+=" $(_corbon_symbol git_staged)$staged"
-
-  (( unstaged > 0 )) &&
-    result+=" $(_corbon_symbol git_dirty)$unstaged"
-
-  (( untracked > 0 )) &&
-    result+=" $(_corbon_symbol git_untracked)$untracked"
+  (( conflict  > 0 )) && result+=" $(_corbon_symbol git_conflict)$conflict"
+  (( staged    > 0 )) && result+=" $(_corbon_symbol git_staged)$staged"
+  (( unstaged  > 0 )) && result+=" $(_corbon_symbol git_dirty)$unstaged"
+  (( untracked > 0 )) && result+=" $(_corbon_symbol git_untracked)$untracked"
 
   print -r -- "$result"
 }
@@ -401,7 +398,7 @@ _corbon_git_ahead_behind() {
 }
 
 _corbon_segment_git() {
-  local root branch git_state ahead
+  local root branch git_state
 
   root="$(_corbon_git_root)" || return
 
@@ -917,12 +914,16 @@ _corbon_detect_color_mode() {
 }
 
 _corbon_adapt() {
+  local segment
+
   if (( COLUMNS < CORBON_WIDTH_THRESHOLD )); then
-    CORBON_ADAPTIVE_RIGHT=(
-      ${CORBON_RIGHT:#runtime}
-      ${CORBON_RIGHT:#time}
-      ${CORBON_RIGHT:#date}
-    )
+    CORBON_ADAPTIVE_RIGHT=()
+    for segment in "${CORBON_RIGHT[@]}"; do
+      case "$segment" in
+        runtime|time|date) ;;
+        *) CORBON_ADAPTIVE_RIGHT+=("$segment") ;;
+      esac
+    done
   else
     CORBON_ADAPTIVE_RIGHT=("${CORBON_RIGHT[@]}")
   fi
@@ -930,41 +931,28 @@ _corbon_adapt() {
 
 _corbon_precmd() {
   local exit_code="$?"
-  local right
+  local left right
 
   _corbon_adapt
 
-  PROMPT=""
+  left="$(_corbon_render_side left "$exit_code")"
 
   if [[ "$CORBON_LAYOUT" == one-line ]]; then
-    _corbon_render_side left "$exit_code"
-    print -Pn " "
-    _corbon_render_side right "$exit_code"
-    _corbon_paint prompt " $CORBON_PROMPT_SYMBOL " bold
-  else
-    _corbon_render_side left "$exit_code"
-    _corbon_paint prompt "\n$CORBON_PROMPT_SYMBOL " bold
-
+    right="$(_corbon_render_side right "$exit_code")"
+    PROMPT="${left} ${right} $(_corbon_paint prompt " $CORBON_PROMPT_SYMBOL " bold)"
     RPROMPT=""
-  fi
-
-  if (( exit_code != 0 )); then
-    PROMPT="$(
-      _corbon_paint error \
-        "$(_corbon_symbol git_conflict) $exit_code" bold
-    )$PROMPT"
-  fi
-
-  if [[ "$CORBON_LAYOUT" == two-line ]]; then
+  else
+    PROMPT="${left}$(_corbon_paint prompt "\n$CORBON_PROMPT_SYMBOL " bold)"
     right="$(
       for segment in "${CORBON_ADAPTIVE_RIGHT[@]}"; do
         _corbon_render_segment "$segment" "$exit_code"
       done
     )"
-
     RPROMPT="$right"
-  else
-    RPROMPT=""
+  fi
+
+  if (( exit_code != 0 )); then
+    PROMPT="$(_corbon_paint error "$(_corbon_symbol git_conflict) $exit_code" bold)$PROMPT"
   fi
 }
 
@@ -1011,5 +999,3 @@ _corbon_init() {
 }
 
 _corbon_init
-
-unset -f _corbon_init
