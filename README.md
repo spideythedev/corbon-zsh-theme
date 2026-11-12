@@ -1,5 +1,5 @@
 # Corbon
-
+![SS1](./ss1.png)
 A lightweight, highly customizable ZSH theme.
 
 Corbon is built around one idea:
